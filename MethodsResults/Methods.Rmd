@@ -1,0 +1,948 @@
+---
+title: "Methods / Results"
+subtitle: "John-Henry Pezzuto"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r, include=FALSE}
+rm(list=ls())
+
+# REPLACE THE TEXT IN BLUE WITH YOUR PATH BELOW
+#setwd("C:/Users/ourminsk/Dropbox/475 - Discounting Study")
+
+if(!require(corrplot)){install.packages("corrplot")}
+if(!require(psych)){install.packages("psych")}
+if(!require(tidyverse)){install.packages("tidyverse")}
+if(!require(GGally)){install.packages("GGally")}
+
+ 
+```
+
+```{r, include=FALSE , warning=FALSE}
+
+# I am using the description row as an important part of my analysis, would be really frustrating without them
+survey.data <- read_csv("Delay Discounting_human_80.csv") 
+information.row <- survey.data[1,]
+
+
+delay.discounting <- survey.data %>%
+  mutate(Q17.13_6_TEXT = tolower(Q17.13_6_TEXT),
+         Q17.13_6_TEXT = trimws(Q17.13_6_TEXT)) %>%
+  filter(!Status == "Survey Preview",
+         Q17.13_6_TEXT == "yes") %>%  # don't take the preview rows
+  group_by(IPAddress) %>%
+  slice(1L) %>% # cut out anyone with duplicate IPAddress
+  ungroup() %>%
+  rbind(information.row) %>% 
+  arrange(Finished) %>%
+  select(-RecipientFirstName, -RecipientEmail, -RecipientLastName, -UserLanguage, 
+         -(SC0:random),-ExternalReference, -(workerId:assignmentId))
+
+
+
+#delay.discounting <- left_join(delay.discounting, collect.time)
+
+```
+
+
+```{r, include=FALSE , warning=FALSE, message=FALSE}
+attach(delay.discounting)
+
+#bmi
+delay.discounting <- delay.discounting %>% 
+  mutate(Q17.7 = as.numeric(Q17.7), # next 3 lines create numeric columns
+         Q17.8_1 = as.numeric(Q17.8_1),
+         Q17.8_2 = as.numeric(Q17.8_2)) %>% 
+  mutate(weight.in.kilos = Q17.7 * .453592, # new column that is weight in kilos
+         height.in.m = (Q17.8_1*12 + Q17.8_2)*.0254)
+
+delay.discounting$bmi = delay.discounting$weight.in.kilos/(delay.discounting$height.in.m^2) # new column that is BMI
+
+#single parents
+checkforsingle <- c("Divorced", "Separated", "Widowed", "Single, never married")
+
+singleparents <- delay.discounting %>%
+  select(IPAddress, Q17.5, Q17.4) %>%  # keep only IPAddress, "Do you have kids?" and Marital Status
+  filter(Q17.5 == "Yes") %>% 
+  mutate(SingleParent = Q17.4 %in% checkforsingle) %>% # new column where marital status matches, single indicators
+  filter(SingleParent == TRUE) # keep only rows that meet single parent condition
+
+
+delay.discounting$SingleParent = IPAddress %in% singleparents$IPAddress # single parents 
+
+
+```
+
+
+```{r, include=FALSE , warning=FALSE, message=FALSE}
+attach(delay.discounting)
+
+delay.discounting$bat.ball = recode(as.numeric(Q16.5.1), `5`=1, .default = 0) #Cognitive Reflection Test Correct
+delay.discounting$widgets = recode(as.numeric(Q16.5.2), `5`=1, .default = 0) #if they wrote 5, correct else false
+delay.discounting$lilypads = recode(as.numeric(Q16.5.3), `47`= 1, .default = 0)
+
+delay.discounting$CRT = delay.discounting$bat.ball + delay.discounting$widgets + delay.discounting$lilypads
+
+
+delay.discounting$fighter = recode(Q15.4, `0`=0, .default = 1)              # As described in data analysis plan
+delay.discounting$political.knowledge = recode(Q101, "Yes - the Republican Party" = 1, .default = 0)
+delay.discounting$electronic.smoker = recode(Q11.2, "Never use electronic cigarettes" = 0, .default = 1)
+delay.discounting$smoker = recode(Q11.3, "Never smoke cigarettes" = 0,
+                         "I used to use electronic cigarettes or vape, but have quit" = 0, .default = 1)
+delay.discounting$never.smoked = recode(Q11.3, "Never smoke cigarettes" = 1, .default = 0)
+delay.discounting$never.drank = recode(Q11.5, `0`= 1, .default=0)
+delay.discounting$drinker = recode(Q11.4, "I did not drink at all" = 0, .default=1)
+delay.discounting$marijuana.user = recode(Q11.7, "Never"=0, .default=1)
+delay.discounting$gambler = recode(Q11.8, "Never"=0, .default=1)
+delay.discounting$internet.user = recode(Q15.7, `0`= 0, .default=1)
+delay.discounting$speedingticket.had = recode(Q12.8, `0`= 0, .default=1)
+delay.discounting$car.accident.had = recode(Q12.9, `0`= 0, .default=1)
+
+
+
+#fix alcohol age
+delay.discounting <- delay.discounting %>% mutate(Q11.5 = as.numeric(Q11.5))
+delay.discounting$Q11.5[which(delay.discounting$Q11.5==0)] <- NA
+
+
+# gender variables
+delay.discounting <- delay.discounting %>%          
+  mutate(gender_char = str_to_lower(Q17.2_1))
+         
+delay.discounting$gender = recode(delay.discounting$gender_char, male = 1,  female = 0)
+delay.discounting$othergender = recode(delay.discounting$gender_char, male = 0, female = 0, .default = 1)
+
+  
+#mark people who avoided sex questions
+delay.discounting <- delay.discounting %>% mutate("No.Sex.Answer" = Q16.3 == "I prefer not to answer")
+
+```
+
+
+
+```{r, include=FALSE }
+
+delay.discounting$Single = recode((Q17.4), "Single, never married"= 1, .default = 0)     # marriage
+delay.discounting$Married = recode((Q17.4), "Married or domestic partnership" = 1, .default = 0)
+delay.discounting$Widowed = recode((Q17.4), "Widowed" = 1, .default = 0)
+delay.discounting$Divorced = recode((Q17.4), "Divorced" = 1, .default = 0)
+delay.discounting$Separated = recode((Q17.4), "Separated" = 1, .default = 0)
+
+delay.discounting$Democrat = recode((Q17.51), "Democrat"= 1, .default = 0)              # politics
+delay.discounting$Republican = recode((Q17.51), "Republican"= 1, .default = 0)
+delay.discounting$Independent = recode((Q17.51), "Independent"= 1, .default = 0)
+delay.discounting$Other.Political.Party = recode((Q17.51), "Other (specify)"= 1, .default = 0)
+delay.discounting$No.Political.Party = recode((Q17.51), "None"= 1, .default = 0)
+
+delay.discounting$Employed = recode((Q17.10), "Employed for wages"= 1, .default = 0)     # employment status
+delay.discounting$Self.Employed = recode((Q17.10), "Self-employed"= 1, .default = 0)
+delay.discounting$Seeking.Work = recode((Q17.10), "Out of work and looking for work" = 1, .default = 0)
+delay.discounting$Not.Seeking.Work = recode((Q17.10),"Out of work but not currently looking for work" = 1, .default = 0)
+delay.discounting$Homemaker = recode((Q17.10),"A homemaker" = 1, .default = 0)
+delay.discounting$Student = recode((Q17.10),"A student" = 1, .default = 0)
+delay.discounting$Military = recode((Q17.10),"Military" = 1, .default = 0)
+delay.discounting$Retired = recode((Q17.10),"Retired" = 1, .default = 0)
+delay.discounting$Unable.to.Work = recode((Q17.10), "Unable to work" = 1, .default = 0)
+
+
+```
+
+
+
+
+```{r, include=FALSE }
+# Speed Up Small Present
+speedup.small.present <- c("Q2.2_1, Q2.2_2, Q2.2_3, Q2.2_4, Q2.2_5, Q2.2_6, Q2.2_7, Q2.2_8, Q2.2_9, Q2.2_10, Q2.2_11, Q2.2_12, Q2.2_13, Q2.2_14, Q2.2_15, Q2.2_16")
+
+#Speed Up Small Future
+speedup.small.future <- c("Q3.2_1, Q3.2_2, Q3.2_3, Q3.2_4, Q3.2_5, Q3.2_6, Q3.2_7, Q3.2_8, Q3.2_9, Q3.2_10, Q3.2_11, Q3.2_12, Q3.2_13, Q3.2_14, Q3.2_15, Q3.2_16")
+
+
+
+# Speed Up Large Future
+speedup.large.future <- c("Q4.2_1, Q4.2_2, Q4.2_3, Q4.2_4, Q4.2_5, Q4.2_6, Q4.2_7, Q4.2_8, Q4.2_9, Q4.2_10, Q4.2_11, Q4.2_12, Q4.2_13, Q4.2_14, Q4.2_15, Q4.2_16")
+
+
+# Speed Up Large Present
+speedup.large.present <- c("Q5.2_1, Q5.2_2, Q5.2_3, Q5.2_4, Q5.2_5, Q5.2_6, Q5.2_7, Q5.2_8, Q5.2_9, Q5.2_10, Q5.2_11, Q5.2_12, Q5.2_13, Q5.2_14, Q5.2_15, Q5.2_16")
+
+
+# Time Discounting Small Present
+td.small.present <- c("Q6.2_1, Q6.2_2, Q6.2_3, Q6.2_4, Q6.2_5, Q6.2_6, Q6.2_7, Q6.2_8, Q6.2_9, Q6.2_10, Q6.2_11, Q6.2_12, Q6.2_13, Q6.2_14, Q6.2_15, Q6.2_16")
+
+
+# Time Discounting Large Present
+td.large.present<- c("Q7.2_1, Q7.2_2, Q7.2_3, Q7.2_4, Q7.2_5, Q7.2_6, Q7.2_7, Q7.2_8, Q7.2_9, Q7.2_10, Q7.2_11, Q7.2_12, Q7.2_13, Q7.2_14, Q7.2_15, Q7.2_16")
+
+
+#Time Discount Small Future
+td.small.future<- c("Q8.2_1, Q8.2_2, Q8.2_3, Q8.2_4, Q8.2_5, Q8.2_6, Q8.2_7, Q8.2_8, Q8.2_9, Q8.2_10, Q8.2_11, Q8.2_12, Q8.2_13, Q8.2_14, Q8.2_15, Q8.2_16")
+
+
+# Time Discounting Large Future
+td.large.future<- c("Q9.2_1, Q9.2_2, Q9.2_3, Q9.2_4, Q9.2_5, Q9.2_6, Q9.2_7, Q9.2_8, Q9.2_9, Q9.2_10, Q9.2_11, Q9.2_12, Q9.2_13, Q9.2_14, Q9.2_15, Q9.2_16")
+
+# Group Questions Together
+discountingtasks <- c(speedup.small.present, speedup.small.future, speedup.large.future, speedup.large.present, td.small.present, td.large.present, td.small.future, td.large.future)
+
+#Name of Questions
+discountingtasksnames <- c("speedup.small.present, speedup.small.future, speedup.large.future, speedup.large.present, td.small.present, td.large.present, td.small.future, td.large.future")
+discountingtasksnames <- unlist(strsplit(discountingtasksnames, ","))
+discountingtasksnames <- str_replace_all(discountingtasksnames, fixed(" "), "")
+
+```
+
+
+```{r, include=FALSE }
+#Empty Data
+questions <- tibble("speedup.small.present"=1:16, "speedup.small.future"=1:16, "speedup.large.future"=1:16,  "speedup.large.present"=1:16, "td.small.present"=1:16, "td.large.present"=1:16, "td.small.future"=1:16, "td.large.future"=1:16)
+
+
+seperator <- function(discountingtasks){
+  i=1
+  for(tasks in discountingtasks){
+
+  working <- unlist(strsplit(tasks, ","))
+  working <- str_replace_all(working, fixed(" "), "")
+  questions[i] <<- working
+  i = i+1
+  }
+return(i)
+  }
+
+seperator(discountingtasks)
+
+z <- delay.discounting[29,]
+```
+
+
+
+
+```{r, include=FALSE }
+
+results <- tibble("ssp.consistent"=1:(nrow(delay.discounting)-1), "ssp.indifference"=1:(nrow(delay.discounting)-1), "ssf.consistent"=1:(nrow(delay.discounting)-1), "ssf.indifference"=1:(nrow(delay.discounting)-1), "slf.consistent"=1:(nrow(delay.discounting)-1), "slf.indifference"=1:(nrow(delay.discounting)-1), "slp.consistent"=1:(nrow(delay.discounting)-1), "slp.indifference"=1:(nrow(delay.discounting)-1),"tdsp.consistent"=1:(nrow(delay.discounting)-1), "tdsp.indifference"=1:(nrow(delay.discounting)-1), "tdlp.consistent"=1:(nrow(delay.discounting)-1), "tdlp.indifference"=1:(nrow(delay.discounting)-1), "tdsf.consistent"=1:(nrow(delay.discounting)-1), "tdsf.indifference"=1:(nrow(delay.discounting)-1), "tdlf.consistent"=1:(nrow(delay.discounting)-1), "tdlf.indifference"=1:(nrow(delay.discounting)-1))
+
+
+##### find indifference point and consistency ####
+
+questionset = 1
+datafiller = 0
+
+for(questionset in 1:ncol(questions)){ #all 8 types of questions
+  
+#data
+findindifference <- delay.discounting %>% 
+  select(questions[[questionset]]) %>% 
+  slice(-1)
+
+# scrape dollar amounts from the questions themselves
+# set for first half
+if(questionset<=4){
+numbers.in.questions <- information.row %>% 
+  select(questions[[questionset]]) %>% 
+  str_sub(256, ) %>% 
+  parse_number()
+
+} else if(questionset<=6){
+  # 3/4
+numbers.in.questions <- information.row %>% 
+  select(questions[[questionset]]) %>%
+  str_replace("-", "") %>% 
+  str_sub(173, ) %>% 
+  parse_number()
+} else if(questionset<=8){
+  # 4/4
+numbers.in.questions <- information.row %>% 
+  select(questions[[questionset]]) %>%
+  str_replace("-", "") %>% 
+  str_sub(180, ) %>% 
+  parse_number()
+}
+
+  
+# link together
+difference.amount.key <- data.frame(questions[[questionset]], numbers.in.questions)
+
+findindifference$switch.column = NA
+findindifference$consistent = NA
+
+#nrow(findindifference)
+for(row in 1:nrow(findindifference)){ #each participant for a given set of questions
+
+  ## foundations
+firstswitch = FALSE 
+column=1
+consistent = TRUE # you are consistent until proven otherwise
+  ###
+
+  for (column in 1:(ncol(findindifference)-2)){ # each choice
+    
+    if (findindifference[row,column]=="No" & firstswitch == FALSE ||findindifference[row,column]=="1" & firstswitch == FALSE){#first indifference
+      switch <- names(findindifference[row,column])
+      firstswitch = TRUE
+    }
+    if (findindifference[row,column]=="Yes" & firstswitch == TRUE || findindifference[row,column]=="2" && firstswitch == TRUE){  #find if consistent
+      consistent = FALSE
+      }
+    
+    if (column==16 & firstswitch == FALSE){#people who are ALWAYS patient
+      switch <- "FOUND ME"
+      }
+    
+    column = column+1
+    }
+findindifference$consistent[row] <- consistent
+findindifference$switch.column[row] <- switch #record where first switch
+}
+
+
+
+#consistent
+datafiller <- datafiller + 1
+results[datafiller] <- findindifference$consistent
+
+# dollar amounts 
+## convert switch points into indifference points
+datafiller <- datafiller + 1
+results[datafiller] <- difference.amount.key$numbers.in.questions[match(findindifference$switch.column, difference.amount.key$questions..questionset..)]
+
+if(questionset== 1 | questionset== 2 |questionset== 5 |questionset== 7){ 
+  results[datafiller] <- results[datafiller] - 1
+} else if (questionset== 3 | questionset== 4 |questionset== 6 |questionset== 8){
+  results[datafiller] <- results[datafiller] - 10
+}
+
+}
+
+
+```
+
+```{r, include=FALSE }
+hyperbolic.exponential <- tibble("ssp.hyperbolic"=1:(nrow(delay.discounting)-1), "ssp.exponential"=1:(nrow(delay.discounting)-1), "ssf.hyperbolic"=1:(nrow(delay.discounting)-1), "ssf.exponential"=1:(nrow(delay.discounting)-1), "slf.hyperbolic"=1:(nrow(delay.discounting)-1), "slf.exponential"=1:(nrow(delay.discounting)-1), "slp.hyperbolic"=1:(nrow(delay.discounting)-1), "slp.exponential"=1:(nrow(delay.discounting)-1),"tdsp.hyperbolic"=1:(nrow(delay.discounting)-1), "tdsp.exponential"=1:(nrow(delay.discounting)-1), "tdlp.hyperbolic"=1:(nrow(delay.discounting)-1), "tdlp.exponential"=1:(nrow(delay.discounting)-1), "tdsf.hyperbolic"=1:(nrow(delay.discounting)-1), "tdsf.exponential"=1:(nrow(delay.discounting)-1), "tdlf.hyperbolic"=1:(nrow(delay.discounting)-1), "tdlf.exponential"=1:(nrow(delay.discounting)-1))
+```
+
+```{r, include=FALSE }
+
+hyperbolic_calculator <- function(indifference, present, small){
+    if (present == TRUE){
+      d = 1
+    } else if (present == FALSE) {
+      d = 7
+    }
+  
+    if (small== TRUE){
+      a = 30
+    } else if (small == FALSE) {
+      a = 300
+    }
+  
+  #formula 
+  k = (((a / indifference) - 1) / d)
+  
+      return(k)
+  }
+```
+
+
+```{r, include=FALSE }
+exponential_calculator <- function(indifference, present, small){
+    if (present == TRUE){
+      d = 1
+    } else if (present == FALSE) {
+      d = 7
+    }
+  
+    if (small == TRUE){
+      a = 30
+    } else if (small == FALSE) {
+      a = 300
+    }
+  
+  #formula 
+  k = (a / indifference)^(1 / d) - 1
+  
+      return(k)
+  }
+```
+
+
+```{r, include=FALSE }
+#if i have negative numbers they should be 0
+for(i in 1:ncol(results)){
+  results[i][results[i] < 0] <- 0
+}
+
+
+## SPEED UP ##
+## calculate amounts for speed up questions = total - switch. Divide by total to make comparison possible
+
+for(i in seq(2, 4, by = 2)){
+  results[i][is.na(results[i])] <- 30 #ppl who paid everything
+  results[i] <- 30 - results[i]
+ 
+  ## Calculating Hyperbolic and Exponential
+  if(i == 2){
+  present.now = TRUE} else if (i == 4) {
+    present.now = FALSE
+  }
+  
+  # hyperbolic 
+  hyperbolic.exponential[i-1] = hyperbolic_calculator(results[i], present = present.now, small = TRUE)      
+  
+  
+  # exponential
+  hyperbolic.exponential[i] = exponential_calculator(results[i], present = present.now, small = TRUE)
+
+}
+
+####################
+
+for(i in seq(6, 8, by = 2)){
+  results[i][is.na(results[i])] <- 300 #ppl who paid everything
+  results[i] <- 300 - results[i]
+  
+  ## Calculating Hyperbolic, Exponential
+  if(i == 6){
+  present.now = FALSE} else if (i == 8) {
+    present.now = TRUE
+  }
+  
+  # hyperbolic 
+  hyperbolic.exponential[i-1] = hyperbolic_calculator(results[i], present = present.now, small = FALSE)
+  
+  #exponential
+  hyperbolic.exponential[i] = exponential_calculator(results[i], present = present.now, small = TRUE)
+
+}
+
+
+## DELAY DISCOUNTING ################
+# calculate non switchers
+for(i in seq(10, 14, by = 4)){
+    results[i][is.na(results[i])] <- 30 #ppl always waited
+ 
+    
+  ## Calculating Hyperbolic, Exponential
+  if(i == 10){
+  present.now = TRUE} else if (i == 14) {
+    present.now = FALSE
+  }
+  # hyperbolic 
+  hyperbolic.exponential[i-1] = hyperbolic_calculator(results[i], present = present.now, small = TRUE)    
+  
+  # exponential
+  hyperbolic.exponential[i] = exponential_calculator(results[i], present = present.now, small = TRUE)
+
+}
+
+######################
+
+for(i in seq(12, 16, by = 4)){
+   results[i][is.na(results[i])] <- 300 #ppl always waited
+  
+  ## Calculating Hyperbolic and Exponential
+  if(i == 12){
+  present.now = TRUE} else if (i == 16) {
+    present.now = FALSE
+  }
+  #hyperbolic 
+  hyperbolic.exponential[i-1] <- hyperbolic_calculator(results[i], present = present.now, small = FALSE) 
+  
+  #exponential
+  hyperbolic.exponential[i] = exponential_calculator(results[i], present = present.now, small = TRUE)
+
+}
+```
+
+
+```{r, include=FALSE }
+results2 <- results
+
+results2 <- results2 %>% select(seq(2, 16, by =2)) %>% 
+  select(ssp.indifference, ssf.indifference, tdsp.indifference, tdsf.indifference,
+         slp.indifference, slf.indifference, tdlp.indifference, tdlf.indifference)
+
+results.consistent <- results %>%
+  select(ends_with(".consistent")) %>% 
+  select(ssp.consistent, ssf.consistent, tdsp.consistent, tdsf.consistent,
+         slp.consistent, slf.consistent, tdlp.consistent, tdlf.consistent)
+
+beta.discounter <- function(indifference.soon, indifference.later, small){
+
+  if (small == TRUE){
+    a = 30
+  } else if (small == FALSE) {
+    a = 300
+  }
+  delta = (indifference.later/a)^(1/6)  
+  beta = (indifference.soon/a)*(1/delta^5)
+  
+  return(beta)
+}
+
+delta.discounter <- function(indifference.soon, indifference.later, small){
+
+  if (small == TRUE){
+    a = 30
+  } else if (small == FALSE) {
+    a = 300
+  }
+  delta = (indifference.later/a)^(1/6)  
+  beta = (indifference.soon/a)*(1/delta^5)
+  
+  return(delta)
+}
+
+```
+
+
+```{r, include=FALSE }
+beta.delta.results <- tibble("ss.beta"=1:(nrow(delay.discounting)-1), "ss.delta"=1:(nrow(delay.discounting)-1),
+ "tds.beta"=1:(nrow(delay.discounting)-1),"tds.delta"=1:(nrow(delay.discounting)-1),
+ "sl.beta"=1:(nrow(delay.discounting)-1), "sl.delta"=1:(nrow(delay.discounting)-1),   "tdl.beta"=1:(nrow(delay.discounting)-1), "tdl.delta"=1:(nrow(delay.discounting)-1))
+
+# small
+for(i in seq(1, 3, by = 2)){
+  beta.delta.results[i] <- beta.discounter(results2[i], results2[i+1], small = TRUE)
+  beta.delta.results[i+1] <- delta.discounter(results2[i], results2[i+1], small = TRUE)
+}
+
+# large 
+for(i in seq(5, 7, by = 2)){
+  beta.delta.results[i] <- beta.discounter(results2[i], results2[i+1], small = FALSE)
+  beta.delta.results[i+1] <- delta.discounter(results2[i], results2[i+1], small = FALSE)
+}
+```
+
+```{r, include=FALSE }
+for(i in seq(2, ncol(results.consistent), by = 2)){
+  results[i][results[i-1] == FALSE] <- NA
+  beta.delta.results[i-1][results.consistent[i] == FALSE | results.consistent[i-1] == FALSE] <- NA # beta
+  beta.delta.results[i][results.consistent[i] == FALSE | results.consistent[i-1] == FALSE] <- NA # delta
+}
+
+# save beta delta
+beta.delta.results <- add_row(beta.delta.results, .before=1)
+delay.discounting <- bind_cols(delay.discounting, beta.delta.results)
+```
+
+
+```{r, include=FALSE }
+for(i in seq(2, 4, by = 2)){
+  # proportional
+  results[i] <- results[i]/30
+}
+
+####################
+
+for(i in seq(6, 8, by = 2)){
+  
+  # proportional
+  results[i] <- results[i]/300
+}
+
+##############
+for(i in seq(10, 14, by = 4)){
+  
+  # proportional
+    results[i] <-results[i]/30
+}
+
+######################
+
+for(i in seq(12, 16, by = 4)){
+
+  #proportional
+   results[i] <-results[i]/300
+}
+
+### Create an Average of the Proportional 
+results <- results %>%
+  mutate(average = rowMeans(.))
+
+
+# save results #############
+results <- add_row(results, .before=1)
+hyperbolic.exponential <- add_row(hyperbolic.exponential, .before=1)
+
+# add proportional to data set
+delay.discounting <- bind_cols(delay.discounting, results)
+
+```
+
+
+```{r, include=FALSE }
+for(i in seq(2, ncol(results), by = 2)){
+  results[i][results[i-1] == FALSE] <- NA
+  hyperbolic.exponential[i-1][results[i-1] == FALSE] <- NA # hyperbolic
+  hyperbolic.exponential[i][results[i-1] == FALSE] <- NA # exponential
+}
+
+colnames(results) <- paste(colnames(results), "consistent",  sep = ".")
+
+results <- results %>% 
+  select(seq(2, ncol(results), by = 2)) %>% 
+  mutate(average.consistent = rowMeans(.))
+
+# save proportional
+delay.discounting <- bind_cols(delay.discounting, results)
+
+# save hyperbolic & exponential
+delay.discounting <- bind_cols(delay.discounting, hyperbolic.exponential)
+
+```
+
+
+
+```{r, include=FALSE , warning=FALSE}
+choices <- delay.discounting %>% 
+  select(Q2.2_1:Q9.2_16) %>% 
+  select(-contains("click"), -contains("page"))
+
+choices[choices=="Yes" | choices==1] <- 0 ## impatient chocies
+choices[choices=="No" | choices==2] <- 1
+
+# overall patience
+patience <- choices %>%
+  mutate_all(funs(as.numeric)) %>% 
+  rowSums()
+
+patience <- as_tibble(patience/ncol(choices))%>% 
+  mutate(Patience = value) %>% 
+  select(-value)
+
+delay.discounting <- bind_cols(delay.discounting, patience) 
+
+# patience speed up
+s.patience <- choices %>%
+  select(1:64) %>% 
+  mutate_all(funs(as.numeric)) %>% 
+  rowSums()
+  
+s.patience <- as_tibble(s.patience/ncol(choices))%>% 
+  mutate(s.Patience = value) %>% 
+  select(-value)
+
+delay.discounting <- bind_cols(delay.discounting, s.patience) 
+
+# patience time discounting
+td.patience <- choices %>%
+  select(65:ncol(choices)) %>% 
+  mutate_all(funs(as.numeric)) %>% 
+  rowSums()
+
+td.patience <- as_tibble(td.patience/ncol(choices))%>% 
+  mutate(td.Patience = value) %>% 
+  select(-value)
+
+delay.discounting <- bind_cols(delay.discounting, td.patience) 
+
+
+```
+
+
+
+
+```{r, include=FALSE , message=FALSE, warning=FALSE}
+db <- read_csv("Delay Discounting_computer_80.csv")
+
+
+db.newdata <- delay.discounting %>%  #collect old calculated vars
+  select("IPAddress", bmi:ncol(delay.discounting))
+
+db <- db %>%  # remove discounting and emotions
+  select(-(1:3), -(5:274)) %>% 
+  select(-(117:ncol(db)))
+
+
+db <- right_join(db, db.newdata)
+
+
+```
+
+
+
+```{r, include=FALSE , message=FALSE, warning=FALSE}
+fms <- db %>% 
+  select(starts_with("Q120"), Q15.11) %>% # take only the columns relating the fms scale
+  mutate_all(funs(as.numeric)) %>% 
+  mutate(comparison.shop = Q120_1_1, bills.on.time = Q120_1_9, monthly.expense.record = Q120_1_2,# give meaningful names
+         within.budget = Q120_1_10, credit.infull = Q120_1_6, maxout.creditcard = Q120_1_7,
+         minimum.on.loan = Q120_1_8, maintain.emergency.fund = Q120_1_11, 
+         save.money.paycheck = Q120_1_12, save.longterm.goal = Q120_1_13, save.retirement = Q120_1_14,
+         bought.stock = Q120_1_15, health.insurance = Q120_1_16, property.insurance = Q120_1_17,
+         life.insurance = Q120_1_18) %>%
+  mutate(smartphone.warenty = recode(Q15.11, `1`=1, `2`=0)) %>% #smart phone warrenty
+  select(-starts_with("Q")) %>% # get rid of original questions
+  mutate(maxout.creditcard = 6 - maxout.creditcard,    #reverse coded as descried in Dew & Xiao
+         minimum.on.loan = 6 - minimum.on.loan) %>% 
+  mutate(OverallFMS = rowMeans(.),
+         FMS_F1.saving = rowMeans(subset(., select = c(maintain.emergency.fund, save.money.paycheck,
+                                                       save.longterm.goal, save.retirement,
+                                                       bought.stock)), na.rm = TRUE),
+         FMS_F2.insurance = rowMeans(subset(., select = c(health.insurance, property.insurance,
+                                                          life.insurance)), na.rm = TRUE),
+         FMS_F3.budget = rowMeans(subset(., select = c(comparison.shop, bills.on.time,
+                                                       monthly.expense.record, within.budget)), na.rm = TRUE),
+         FMS_F4.credit = rowMeans(subset(., select = c(credit.infull, maxout.creditcard,
+                                                       minimum.on.loan)), na.rm = TRUE))
+
+
+
+# save results
+db <- bind_cols(fms, db)
+
+```
+
+
+
+
+```{r, include=FALSE , message=FALSE, warning=FALSE}
+
+#rename columns
+db <- rename(db, vape = Q11.2, smoke = Q11.3, smoke.age = Q11.9, alcohol = Q11.4, alcohol.age = Q11.5, 
+       passed.out.from.drinking = Q11.10, caffeine = Q11.6, marijuana = Q11.7, gamble = Q11.8,
+       attention.to.politics = Q12.2, register.vote = `12.11`, senate = Q12.21, 
+       donate.campaign = Q12.22,music.tax = Q12.4, green.tax = Q12.5, ideology = Q12.61, vote = Q12.71,
+       vote.early = Q12.72, arrested = Q12.7, speedingtickets = Q12.8, caraccident = Q12.9,
+       wealth.comparison = Q13.2, creditcard.late = Q13.3, 
+       payday.lending = Q13.4, sustainable.goods = Q13.6,
+       sustain.self = Q13.7, income.saved.percent = Q13.8_1, actual.saved = Q104, 
+       prescription = Q14.2, fastfood = Q14.3, actual.debt = Q105, 
+       dentalstatus = Q14.4, exercise = Q14.5, vaccination = Q14.6, washinghands = Q14.7_1, 
+       television = Q15.2, high.adreneline = Q15.3, physical.fight = Q15.4, luxurygoods = Q15.5,
+       shopping.anxiety = Q15.6, check.online = Q15.7, had.sex = Q16.3, sex.age = Q16.4, adultry = Q16.5,
+       multple.partners = Q16.51, inebriated.sex = Q16.6, age = Q17.3, marital.status = Q17.4,
+       have.children = Q17.5, politcal.affiliation = Q17.51, 
+       age.firstchild = Q17.6, weight = Q17.7, employmentstatus = Q17.10, hoseholdincome = Q17.11, 
+       expected.householdincome = Q17.12, race = Q17.9, english.native = Q17.14)
+
+
+
+db <- db %>% 
+  select(-starts_with("Q")) %>% # don't keep original questions
+  select(-gender_char)  # get rid of non-numeric
+  
+  
+```
+
+
+
+```{r, include=FALSE }
+confusedpeople.exclude <- db %>% 
+  filter(tdsp.indifference>0, tdlp.indifference>0,  tdsf.indifference>0, tdlf.indifference>0,
+        ssp.indifference>0, slp.indifference>0, ssf.indifference>0, slf.indifference>0)
+ 
+
+db <- db %>% mutate("Confused" = !IPAddress %in% confusedpeople.exclude$IPAddress)
+
+
+confusedpeople.exclude %>% summarise(Percent.of.Confused.People = (nrow(db)-nrow(.))/nrow(db))
+
+```
+
+
+
+```{r, include=FALSE }
+db %>% 
+  mutate(Percent.Inconsistent = average.consistent) %>%
+  select(Percent.Inconsistent) %>% 
+  summarise_all(funs(mean(is.na(.))))
+```
+
+
+```{r, include=FALSE }
+weirdos <- delay.discounting[is.infinite(delay.discounting$tdsf.hyperbolic) | is.infinite(delay.discounting$slp.exponential) |
+                             is.infinite(delay.discounting$slp.hyperbolic) | is.infinite(delay.discounting$tdsf.exponential), ]
+
+weirdos <- weirdos %>% 
+  mutate("Confused" = !IPAddress %in% confusedpeople.exclude$IPAddress) %>%
+  select(questions$speedup.small.future, ssf.consistent, ssf.indifference, ssf.hyperbolic, ssf.exponential,
+         questions$speedup.small.present, ssp.consistent, ssp.indifference, ssp.hyperbolic, ssp.exponential,
+         questions$speedup.large.future, slf.consistent, slf.indifference, slf.hyperbolic, slf.exponential,
+         questions$speedup.large.present, slp.consistent, slp.indifference, slp.hyperbolic, slp.exponential,
+         questions$td.small.future, tdsf.consistent, tdsf.indifference, tdsf.hyperbolic, tdsf.exponential,
+         questions$td.small.present, tdsp.consistent, tdsp.indifference, tdsp.hyperbolic, tdsp.exponential,
+         questions$td.large.future, tdlf.consistent, tdlf.indifference, tdlf.hyperbolic, tdlf.exponential,
+         questions$td.large.present, tdlp.consistent, tdlp.indifference, tdlp.hyperbolic, tdlp.exponential)
+
+```
+
+
+
+
+```{r, include=FALSE }
+
+db <- db %>% select(-IPAddress) %>% mutate_all(as.numeric)
+
+sd.times.3 <- apply(db, 2, sd, na.rm = TRUE)*3
+sd.times.3 <- as.data.frame(sd.times.3)
+
+
+mean.cols <- colMeans(db, na.rm = TRUE)
+
+mean.cols <- as.data.frame(mean.cols)
+
+
+mean.sd3 <- sd.times.3 + mean.cols
+
+continuous.vars = c("alcohol.age", "sustain.self", "smoke.age", "passed.out.from.drinking", "speedingtickets", "caraccident", "physical.fight", "check.online", "age", "age.firstchild", "weight", "bmi")
+
+
+
+for(i in continuous.vars){ ##this wont work for car accidents cause mean.sd3 = 1 ...
+  db[,i][abs(db[,i])>mean.sd3[i,1]] <- NA
+}
+
+```
+
+```{r, include=FALSE }
+proportions.cols = delay.discounting %>% select(ends_with("indifference.consistent")) %>% colnames(.)
+
+patience.cols = c("Patience", "s.Patience", "td.Patience")
+
+hyperbolic.exponential.cols = hyperbolic.exponential %>% 
+  select(ends_with("hyperbolic"), ends_with("exponential")) %>% 
+  colnames(.)
+
+beta.delta.cols = colnames(beta.delta.results)
+
+```
+
+
+
+```{r, include=FALSE }
+db <- db[2:nrow(db),]
+
+proportion.correlations <- db %>% cor(use="pairwise.complete.obs") %>% # using people who are consistent. proportions
+  as.data.frame() %>% 
+  round(2) %>% 
+  select(proportions.cols)
+
+
+patience.correlations <- db %>% cor(use="pairwise.complete.obs") %>% # patience scores
+  as.data.frame() %>% 
+  round(2) %>% 
+  select(patience.cols) 
+
+hyperbolic.exponential.correlations <- db %>% cor(use="pairwise.complete.obs") %>% # patience scores
+  as.data.frame() %>% 
+  round(2) %>% 
+  select(hyperbolic.exponential.cols)
+
+beta.delta.correlations<- db %>% cor(use="pairwise.complete.obs") %>% # patience scores
+  as.data.frame() %>% 
+  round(2) %>% 
+  select(beta.delta.cols) 
+```
+
+
+**NOTE RESULTS PRESENTED ARE FROM PILOT SURVEY. FULL SURVEY WILL USE SAME ANALYSIS BUT CONTAIN FULL SAMPLE**
+**I HAVE NOT YET DECIDED ON HOW TO DEAL WITH DISCOUNT RATES GOING TO INFINITY**
+**Because this is not full sample most of these correlations are only noise... because the correlations we are looking for will be very slim, we are waiting until later to assign significance**
+```{r, include=FALSE}
+respond.count <- survey.data %>% 
+  select(Status) %>% 
+  filter(!Status == "Survey Preview") %>% 
+  count()
+respond.count <- as.numeric(respond.count)
+
+female <- delay.discounting$gender[which(delay.discounting$gender==0)]
+female <- sum(female == 0)
+male <- delay.discounting$gender[which(delay.discounting$gender==1)]
+male <- sum(male == 1)
+
+## final sample size
+final.samplesize <- nrow(db)
+
+## age correlations 
+age.min <- min(db$age, na.rm = TRUE)
+age.max <- max(db$age, na.rm = TRUE)
+```
+
+# Methods
+
+## Participants
+  Participants were `r respond.count` workers recruited from Amazon Mechanical Turk (MTurk). Participants were excluded from analysis if they did not complete the survey, had duplicate IP Addresses or MTurk IDs, failed a single attention check at the end of the survey, or reported not being able to read the questions. In addition we exclude participants who completed the survey in less than 6.5 minutes. This left us with a final sample size of  `r final.samplesize` (`r male` males, `r female` females) with an age range from `r age.min` to `r age.max`. Participants were required to answer all questions except for one section about private behavior. 
+
+## Measures
+
+  *Eliciting Discounting*. A total of 8 different methods were used the elicit discounting. All payments were hypothetical. These 8 different methods can be divided into two categories (speed-up and binary time discounting) that varied by both size of payment, and time period. In speed-up measure where participants stated how much they would be willing to pay to speed up delivery of a hypothetical payment to a sooner time period. The payments began at $0.01 and ascended by \$2 increments in the smaller condition or by \$20 increments in the large condition until the full amount of the larger but later reward. There were a total of 10 questions in used by each method. Below is a table summarizing the 8 methods of eliciting discounting.
+```{r, include=FALSE , echo = FALSE}
+library(knitr)
+taskname <- discountingtasksnames
+taskname <- sort(as.character(taskname))
+taskname <- str_replace(taskname, "td", "Time Discounting")
+taskname <- str_replace_all(taskname, fixed("."), " ")
+proper=function(x) paste0(toupper(substr(x, 1, 1)), tolower(substring(x, 2)))
+taskname <- proper(taskname)
+
+abbreviation <- c("slf", "slp", "ssf", "ssp", "tdlf", "tdlp", "tdsf", "tdsp")
+
+sooner <- c("1 month", "today")
+later <- c("7 months", "6 months")
+maximum.payment.size <- c("300", "300", "30", "30")
+methods.table <- data.frame(taskname, abbreviation, sooner, later, maximum.payment.size)
+methods.table %>% kable(align = 'r', col.names = c("Discounting Task","Abbreviation" , "Sooner Payment", "Later Payment", "Maximum Payment Size"))
+```
+
+  *Measuring Discount Rate*. Discount rate was measured in a variety of ways, both with including all the participants and using only the participants who discounted consistently. A patience was measured using all participants. We created an three patience scores which was the proportion of all discounting questions in which participants chose the later-larger option. One of these patience scores was for speedup questions, one for time discounting, and one was an overall patience score including all questions. The indifference proportion, hyperbolic, exponential, and quasi-hyperbolic measures excluded participants who answered questions inconsistently.
+  Indifference was created an indifference by dividing the indifference point by the later but larger payment. This measure ranges between 0 and 1 where 0 indicates no patience at all and 1 indicates absolute patience as described in Bartels & Urminsky, 2011. This was done individually for all 8 methods of measuring discounting. The methods for measuring the hyperbolic and exponential discount rates were done previously described, and done for all 8 methods individually. We created a quasi-hyperbolic score for each set of present and future payments (for a total 4 sets) with corresponding $\beta$ and $\delta$s.
+
+  *Demographics*. Subjects reported their age, marital status, having children, political affiliation, weight in lbs, height in feet and inches, employment status, ethnicity, household income in the past 12 months, expected household income in the next 12 months, and whether English was their native language. Employment status, political affiliation, and marital status were all dummy coded. Participants who reported having children were asked their age when their children were born.
+
+  *Political Interest*. Participants were asked whether they registered to vote in the 2016 presidential election, about their interest in the 2018 midterm election, which party had the majority in Congress, whether they donated to any candidate in the 2016 election, whether they would support a one time tax to support a music program, or if they would favor or oppose a government increase of the excise tax on fuel to protect the environment, their political ideology. Participants were coded as politically knowledgeable based on whether they could correctly answer which party has the majority in Senate. Participants who indicated that they registered to vote were asked whether they voted, and whether they voted in the election early.
+  
+   *Law Abiding Behavior*. Participants were asked whether they had ever been arrested, how many speeding tickets they received in the the last year, and how many times they were in car accident while they were driving in the past 5 years. 
+   
+  *Financial Managment Behavior Scale* Participants were given the full Financial Management Behavior Scale (FMS) as described in Dew & Xiao (2011). We created an overall FMS score that was an average of the questions, as well as FMS sub scores in savings, insurance, budgeting, and credit.
+
+  *Financial Behaviors*. Participants were asked whether they had an extended warranty on their smart phone, how much wealth they accumulated compared to their friends, how many months they would be able to sustain themselves if they lost their current stream of income, what percent of their income did they save, how many times they were charged a late fee for making a credit card payment after the deadline, if they used a cash or payday lending service in the past 5 years, whether they prefer to spend more for environmentally sustainable goods, what their actual amount of savings is, and what their actual amount of debt is.
+  
+  *Health Behavior*. Participants were asked how often they finished their prescriptions, if they had eaten at a fast-food or pizza restaurant in the last 2 months, what their dental status is, how often they exercised in the past month for at least half an hour, if they received a vaccination in the last 12 months, and what percent of the time do they wash their hands after using the bathroom.
+  
+  *Leisure Behavior*. Participants were asked how much they binge when watching television, whether they participate in "extreme" sports, how many times they were in physical fights outside of contact sports, whether they purchase designer or luxury goods, whether they exhibit shopping anxiety, and how many times a day they check online social media and other websites.
+  
+  *Cognitive Reflections Test*. Participants were gives a 3-item Cognitive Reflection Test. An overall score between 0 and 3 was also given to participants based on how many questions they answered correctly.
+
+  *Private Behavior*. In this section participants had a choice not to answer any question. The first question participants were asked was whether they had ever had sexual intercourse. Conditional on saying yes, participants were asked whether their first time was before or after the age of 16, if they had ever been unfaithful to a partner, whether they had more than 1 partner in the previous 6 months, and whether they engage in sex under the influence of alcohol or other drugs.
+  
+  *Exlusion Criteria* pariticpants who answered any of the continuous questions with an answer greater than the mean + 3 standard deviations were excluded from analysis. All continuous questions were capped at 0 as a minimum answer.
+  
+# Results
+
+## Correlations
+
+### Patience Correlations
+```{r, include=T, warning=FALSE, echo=FALSE}
+library(kableExtra)
+patience.correlations %>% 
+  kable(format = "markdown") %>% 
+  kable_styling(bootstrap_options = c("striped", "scale_down"))
+```
+
+### Indifference Proportion Correlations
+```{r, include=T, warning=FALSE, echo=FALSE}
+proportion.correlations %>% 
+  kable(format = "markdown", col.names = c("ssp.indif", "ssf.indif", "slf.indif", "slp.indif", 
+                                           "tdsp.indif", "tdlp.indif", "tdsf.indif", "tdlf.indif")) %>% 
+  kable_styling(bootstrap_options = c("striped", "scale_down"))
+
+
+```
+
+
+
+### Quasi-Hyperbolic Correlations
+```{r, include=T, warning=FALSE, echo=FALSE}
+
+beta.delta.correlations %>% 
+  kable(format = "markdown") %>% 
+  kable_styling(bootstrap_options = c("striped", "scale_down"))
+
+
+```
+
+
