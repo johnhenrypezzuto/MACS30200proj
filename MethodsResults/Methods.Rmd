@@ -836,12 +836,17 @@ beta.delta.correlations<- db %>% cor(use="pairwise.complete.obs") %>% # patience
   as.data.frame() %>% 
   round(2) %>% 
   select(beta.delta.cols) 
+
+average.correlations <- db %>% cor(use="pairwise.complete.obs") %>% # average of indifference columns
+  as.data.frame() %>% 
+  round(2) %>% 
+  select(average, average.consistent)
 ```
 
 
-**NOTE RESULTS PRESENTED ARE FROM PILOT SURVEY. FULL SURVEY WILL USE SAME ANALYSIS BUT CONTAIN FULL SAMPLE**
-**I HAVE NOT YET DECIDED ON HOW TO DEAL WITH DISCOUNT RATES GOING TO INFINITY**
-**Because this is not full sample most of these correlations are only noise... because the correlations we are looking for will be very slim, we are waiting until later to assign significance**
+**NOTE RESULTS PRESENTED ARE FROM PILOT SURVEY. FULL SURVEY WILL USE SAME ANALYSIS BUT CONTAIN FULL SAMPLE.**
+**I HAVE NOT YET DECIDED ON HOW TO DEAL WITH DISCOUNT RATES GOING TO INFINITY.**
+**Because this is not full sample most of these correlations are only noise... because the correlations we are looking for will be very slim, we are waiting until later to assign significance.**
 ```{r, include=FALSE}
 respond.count <- survey.data %>% 
   select(Status) %>% 
@@ -865,11 +870,11 @@ age.max <- max(db$age, na.rm = TRUE)
 # Methods
 
 ## Participants
-  Participants were `r respond.count` workers recruited from Amazon Mechanical Turk (MTurk). Participants were excluded from analysis if they did not complete the survey, had duplicate IP Addresses or MTurk IDs, failed a single attention check at the end of the survey, or reported not being able to read the questions. In addition we exclude participants who completed the survey in less than 6.5 minutes. This left us with a final sample size of  `r final.samplesize` (`r male` males, `r female` females) with an age range from `r age.min` to `r age.max`. Participants were required to answer all questions except for one section about private behavior. 
+  Participants were `r respond.count` workers recruited from Amazon Mechanical Turk (MTurk). Participants were excluded from analysis if they did not complete the survey, had duplicate IP Addresses or MTurk IDs, failed a single attention check at the end of the survey, or reported not being able to read the questions in a comments section at the end of the survey. In addition we exclude participants who completed the survey in less than 6.5 minutes. This left us with a final sample size of  `r final.samplesize` (`r male` males, `r female` females) with an age range from `r age.min` to `r age.max`. Participants were required to answer all questions except for one section about private behavior. 
 
 ## Measures
 
-  *Eliciting Discounting*. A total of 8 different methods were used the elicit discounting. All payments were hypothetical. These 8 different methods can be divided into two categories (speed-up and binary time discounting) that varied by both size of payment, and time period. In speed-up measure where participants stated how much they would be willing to pay to speed up delivery of a hypothetical payment to a sooner time period. The payments began at $0.01 and ascended by \$2 increments in the smaller condition or by \$20 increments in the large condition until the full amount of the larger but later reward. There were a total of 10 questions in used by each method. Below is a table summarizing the 8 methods of eliciting discounting.
+  *Eliciting Discounting*. A total of 8 different methods were used the elicit discounting. All payments were hypothetical. These 8 different methods can be divided into two categories (speed-up and binary time discounting) that varied by both size of payment, and time period. In the speed-up measure, participants stated how much they would be willing to pay to speed up delivery of a hypothetical payment to a sooner time period. The payments began at $0.01 and ascended by \$2 increments in the smaller condition or by \$20 increments in the large condition until the full amount of the larger but later reward was reached. There were a total of 10 questions used by each method. Below is a table summarizing the 8 methods of eliciting discounting.
 ```{r, include=FALSE , echo = FALSE}
 library(knitr)
 taskname <- discountingtasksnames
@@ -888,18 +893,20 @@ methods.table <- data.frame(taskname, abbreviation, sooner, later, maximum.payme
 methods.table %>% kable(align = 'r', col.names = c("Discounting Task","Abbreviation" , "Sooner Payment", "Later Payment", "Maximum Payment Size"))
 ```
 
-  *Measuring Discount Rate*. Discount rate was measured in a variety of ways, both with including all the participants and using only the participants who discounted consistently. A patience was measured using all participants. We created an three patience scores which was the proportion of all discounting questions in which participants chose the later-larger option. One of these patience scores was for speedup questions, one for time discounting, and one was an overall patience score including all questions. The indifference proportion, hyperbolic, exponential, and quasi-hyperbolic measures excluded participants who answered questions inconsistently.
-  Indifference was created an indifference by dividing the indifference point by the later but larger payment. This measure ranges between 0 and 1 where 0 indicates no patience at all and 1 indicates absolute patience as described in Bartels & Urminsky, 2011. This was done individually for all 8 methods of measuring discounting. The methods for measuring the hyperbolic and exponential discount rates were done previously described, and done for all 8 methods individually. We created a quasi-hyperbolic score for each set of present and future payments (for a total 4 sets) with corresponding $\beta$ and $\delta$s.
+  *Measuring Discount Rate*. Discount rate was measured in a variety of ways, both with including all the participants and with using only the participants who discounted consistently. Patience scores were measured using all participants. We created three different patience scores, which were determined by the proportion of discounting questions in which participants chose the later-larger option. One of these patience scores was exclusively for speedup questions, one was exclusively for time discounting, and one was an overall patience score including all questions. The indifference proportion, hyperbolic, exponential, and quasi-hyperbolic measures excluded participants who answered questions inconsistently.
+  Indifference was created by finding the indifference point and dividing it by the later but larger payment. This measure ranges between 0 and 1 where 0 indicates no patience at all and 1 indicates absolute patience as described in Bartels & Urminsky, 2011. This was done individually for all 8 methods of measuring discounting. The methods for measuring the hyperbolic and exponential discount rates were done as previously described, and done for all 8 methods individually. We created a quasi-hyperbolic score for each set of present and future payments (for a total 4 sets) with corresponding $\beta$ and $\delta$s.
 
-  *Demographics*. Subjects reported their age, marital status, having children, political affiliation, weight in lbs, height in feet and inches, employment status, ethnicity, household income in the past 12 months, expected household income in the next 12 months, and whether English was their native language. Employment status, political affiliation, and marital status were all dummy coded. Participants who reported having children were asked their age when their children were born.
+  *Demographics*. Participants reported their age, marital status, having children, political affiliation, weight in lbs, height in feet and inches, employment status, ethnicity, household income in the past 12 months, expected household income in the next 12 months, and whether English was their native language. Employment status, political affiliation, and marital status were all dummy coded. Participants who reported having children were asked their age when their children were born. Body mass index (BMI) was imputed as the calculated by dividing the weight of participants in kilograms, by their height in meters. Confused was calculated based on participants who made the most possible impulsive choice in any of the discounting methods (e.g. I prefer .01 today to $30 in a month). 
 
-  *Political Interest*. Participants were asked whether they registered to vote in the 2016 presidential election, about their interest in the 2018 midterm election, which party had the majority in Congress, whether they donated to any candidate in the 2016 election, whether they would support a one time tax to support a music program, or if they would favor or oppose a government increase of the excise tax on fuel to protect the environment, their political ideology. Participants were coded as politically knowledgeable based on whether they could correctly answer which party has the majority in Senate. Participants who indicated that they registered to vote were asked whether they voted, and whether they voted in the election early.
+  *Substance*. Participants were asked how often they vaped or used electronic cigarettes, how many cigarettes they smoke regularly, how often they drank alcohol in the last month, at what age they first started drinking alcohol, if they drink caffeine or take caffeine related supplements, how frequently they smoke marijuana, how often they gamble. Participants who indicated they smoked cigarettes were asked at what age they started smoking. Participants who indicated that they drink alcohol were asked how many times they passed out from drinking alcohol. 
+
+  *Political Interest*. Participants were asked whether they registered to vote in the 2016 presidential election, about their interest in the 2018 midterm election, which party had the majority in Congress, whether they donated to any candidate in the 2016 election, whether they would support a one time tax to support a music program, if they would favor or oppose a government increase of the excise tax on fuel to protect the environment, and their political ideology. Participants were coded as politically knowledgeable based on whether they could correctly answer which party has the majority in Senate. Participants who indicated that they registered to vote were asked whether they voted, and whether they voted in the election early if their state allowed.
   
    *Law Abiding Behavior*. Participants were asked whether they had ever been arrested, how many speeding tickets they received in the the last year, and how many times they were in car accident while they were driving in the past 5 years. 
    
   *Financial Managment Behavior Scale* Participants were given the full Financial Management Behavior Scale (FMS) as described in Dew & Xiao (2011). We created an overall FMS score that was an average of the questions, as well as FMS sub scores in savings, insurance, budgeting, and credit.
 
-  *Financial Behaviors*. Participants were asked whether they had an extended warranty on their smart phone, how much wealth they accumulated compared to their friends, how many months they would be able to sustain themselves if they lost their current stream of income, what percent of their income did they save, how many times they were charged a late fee for making a credit card payment after the deadline, if they used a cash or payday lending service in the past 5 years, whether they prefer to spend more for environmentally sustainable goods, what their actual amount of savings is, and what their actual amount of debt is.
+  *Financial Behaviors*. Participants were asked whether they had an extended warranty on their smart phone, how much wealth they accumulated compared to their friends, how many months they would be able to sustain themselves if they lost their current stream of income, what percent of their income they save, how many times they were charged a late fee for making a credit card payment after the deadline, if they used a cash or payday lending service in the past 5 years, whether they prefer to spend more for environmentally sustainable goods, what their actual amount of savings is, and what their actual amount of debt is.
   
   *Health Behavior*. Participants were asked how often they finished their prescriptions, if they had eaten at a fast-food or pizza restaurant in the last 2 months, what their dental status is, how often they exercised in the past month for at least half an hour, if they received a vaccination in the last 12 months, and what percent of the time do they wash their hands after using the bathroom.
   
@@ -909,10 +916,11 @@ methods.table %>% kable(align = 'r', col.names = c("Discounting Task","Abbreviat
 
   *Private Behavior*. In this section participants had a choice not to answer any question. The first question participants were asked was whether they had ever had sexual intercourse. Conditional on saying yes, participants were asked whether their first time was before or after the age of 16, if they had ever been unfaithful to a partner, whether they had more than 1 partner in the previous 6 months, and whether they engage in sex under the influence of alcohol or other drugs.
   
-  *Exlusion Criteria* pariticpants who answered any of the continuous questions with an answer greater than the mean + 3 standard deviations were excluded from analysis. All continuous questions were capped at 0 as a minimum answer.
+  *Exlusion Criteria* participants who answered any of the continuous questions with an answer greater than the mean + 3 standard deviations were excluded from analysis. All continuous questions were capped at 0 as a minimum answer.
   
 # Results
 
+  I present the results showing the relationship between the behavioral measures and and the time discounting methods.
 ## Correlations
 
 ### Patience Correlations
@@ -946,3 +954,25 @@ beta.delta.correlations %>%
 ```
 
 
+### Strongest Method
+
+I am still undecided the best measure of calculating the discount rate. As a rough proxy I am going to take the absolute value of each correlation, and sum them all. The largest number should approximately be the best method.
+
+```{r, include=T, warning=FALSE, echo=FALSE}
+x <- data.frame(abs(patience.correlations) %>% colSums(na.rm = TRUE))
+colnames(x) <- "value"
+
+y <- data.frame(abs(proportion.correlations) %>% colSums(na.rm = TRUE))
+colnames(y) <- "value"
+
+z <- data.frame(abs(beta.delta.correlations) %>% colSums(na.rm = TRUE))
+colnames(z) <- "value"
+
+zz <- data.frame(abs(average.correlations) %>% colSums(na.rm = TRUE))
+colnames(zz) <- "value"
+
+kable(rbind(x, y, zz, z))
+
+```
+
+From looking at this chart, it looks like the average of all the consistent indifference measures is the best predictor of behavior. Patience is also the a strong predictor of behavior, but does not exclude inconsistent discounters.
