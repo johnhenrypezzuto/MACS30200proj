@@ -1,0 +1,329 @@
+---
+title: "Problem Set 3"
+subtitle: "John-Henry Pezzuto"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+## Load Packages & Data
+```{r setup}
+library(tidyverse)
+library(keras)
+```
+
+```{r global_options, include=FALSE}
+rm(list=ls())
+theme_set(theme_minimal())
+#knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+# Part 1 - Image classification
+
+## 1 - Set Seed
+```{r}
+set.seed(1234)
+```
+
+
+## 2 - Load MNIST Data Set
+
+### Load
+```{r}
+mnist <- dataset_mnist()
+train_images <- mnist$train$x
+train_labels <- mnist$train$y
+test_images <- mnist$test$x
+test_labels <- mnist$test$y
+```
+
+
+### Preprocess
+```{r}
+train_images <- array_reshape(train_images, c(60000, 28 * 28))
+train_images <- train_images / 255
+
+test_images <- array_reshape(test_images, c(10000, 28 * 28))
+test_images <- test_images / 255
+```
+
+### Preprocess Labels
+```{r}
+train_labels <- to_categorical(train_labels)
+test_labels <- to_categorical(test_labels)
+```
+
+## 3 - Implement a Series of Neural Networks
+
+### Initial Test
+
+#### Network Archictecture
+```{r}
+network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>% 
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dense(units = 10, activation = "softmax")
+```
+
+#### Compilation Step
+```{r}
+network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+```
+
+
+
+```{r, message=FALSE}
+history <- network %>% fit(train_images, train_labels, epochs = 200, batch_size = 512)
+```
+
+
+
+```{r}
+plot(history)
+```
+
+### Implement Dropout
+```{r}
+network2 <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 10, activation = "softmax")
+```
+
+```{r}
+network2 %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+```
+
+```{r, message=FALSE}
+history2 <- network2 %>% fit(train_images, train_labels, epochs = 200, batch_size = 512) # should be 200 in real example
+```
+
+```{r}
+plot(history2)
+ss <- as.data.frame(history2)
+```
+### Weight Regularization
+
+#### L1
+```{r}
+network.l1 <- keras_model_sequential() %>% 
+  layer_dense(units = 512, kernel_regularizer = regularizer_l1(0.001), activation = "relu", input_shape = c(28 * 28)) %>% 
+  layer_dense(units = 512, kernel_regularizer = regularizer_l1(0.001), activation = "relu") %>%
+  layer_dense(units = 512, kernel_regularizer = regularizer_l1(0.001), activation = "relu") %>%
+  layer_dense(units = 512, kernel_regularizer = regularizer_l1(0.001), activation = "relu") %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network.l1 %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history.l1 <- network.l1 %>% fit(train_images, train_labels, epochs = 200, batch_size = 512) # should be 200 in real example
+
+```
+
+
+
+#### L2
+```{r}
+network.l2 <- keras_model_sequential() %>% 
+  layer_dense(units = 512, kernel_regularizer = regularizer_l2(0.001), activation = "relu", input_shape = c(28 * 28)) %>% 
+  layer_dense(units = 512, kernel_regularizer = regularizer_l2(0.001), activation = "relu") %>%
+  layer_dense(units = 512, kernel_regularizer = regularizer_l2(0.001), activation = "relu") %>%
+  layer_dense(units = 512, kernel_regularizer = regularizer_l2(0.001), activation = "relu") %>%
+  layer_dense(units = 10, activation = "softmax")
+
+network.l2 %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+history.l2 <- network.l2 %>% fit(train_images, train_labels, epochs = 200, batch_size = 512) # should be 200 in real example
+```
+
+#### L1 Plot 
+```{r}
+plot(history.l1)
+```
+#### L2 Plot
+```{r}
+plot(history.l2)
+```
+
+### Final Model
+
+#### Which Epoch From Which Model Had the Lowest Validation Loss?
+```{r}
+  a <- min(history$metrics$loss)
+  b <- min(history2$metrics$loss)
+  c <- min(history.l1$metrics$loss)
+  d <- min(history.l2$metrics$loss)
+  
+  if (which.min(c(a, b, c, d))==1){
+    print("The original model had the epoch lowest validation loss")
+    cat("The lowest epoch is:", which.min(history$metrics$loss))
+    lowest_epoch <- which.min(history$metrics$loss)
+  }else if (which.min(c(a, b, c, d))==2){
+    print("The dropout model had the epoch lowest validation loss")
+    cat("The lowest epoch is:", which.min(history2$metrics$loss))
+    lowest_epoch <- which.min(history2$metrics$loss)
+  }else if (which.min(c(a, b, c, d))==3){
+    print("The regularlization_l1 model had the epoch lowest validation loss")
+      cat("The lowest epoch is:", which.min(history.l1$metrics$loss))
+    lowest_epoch <- which.min(history.l1$metrics$loss)
+  }else if (which.min(c(a, b, c, d))==4){
+    print("The regularization_l2 model had the epoch lowest validation loss")
+    cat("The lowest epoch is:", which.min(history.l2$metrics$loss))
+    lowest_epoch <- which.min(history.l2$metrics$loss)
+  }
+
+```
+
+
+(I got the lowest score with the original model when I ran this at home)
+
+```{r}
+final_network <- keras_model_sequential() %>% 
+  layer_dense(units = 512, activation = "relu", input_shape = c(28 * 28)) %>% 
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dense(units = 512, activation = "relu") %>%
+  layer_dense(units = 10, activation = "softmax")
+
+final_network %>% compile(
+  optimizer = "rmsprop",
+  loss = "categorical_crossentropy",
+  metrics = c("accuracy")
+)
+
+final_history <- final_network %>% fit(train_images, train_labels, epochs = lowest_epoch, batch_size = 512) # should be 200 in real example
+```
+
+```{r}
+(metrics <- final_network %>% evaluate(test_images, test_labels))
+
+final_loss <- metrics$loss
+final_accuracy <- metrics$acc
+```
+
+The model in the book had a loss of .07 and accuracy of .97. My model has a loss of `r final_loss` and a final accuracy of `r final_accuracy`. As of the time of writing this, my model had a higher accuracy, but also a higher loss. 
+
+# Part 2 - Scalar regression (5 points)
+
+## Load Data
+```{r}
+dataset <- dataset_boston_housing()
+c(c(train_data, train_targets), c(test_data, test_targets)) %<-% dataset
+```
+
+## Prepare Data
+```{r}
+mean.housing <- apply(train_data, 2, mean)
+std.housing <- apply(train_data, 2, sd)
+train_data <- scale(train_data, center = mean.housing, scale = std.housing)
+test_data <- scale(test_data, center = mean.housing, scale = std.housing)
+```
+
+
+## Build Model Function
+```{r}
+build_model <- function() {
+model <- keras_model_sequential() %>%
+layer_dense(units = 64, activation = "relu",
+input_shape = dim(train_data)[[2]]) %>%
+layer_dense(units = 64, activation = "relu") %>%
+layer_dense(units = 1)
+model %>% compile(
+optimizer = "rmsprop",
+loss = "mse",
+metrics = c("mse")
+)
+}
+```
+
+## 10-Fold Cross Validation
+```{r, warning=FALSE}
+k <- 10
+indices <- sample(1:nrow(train_data))
+folds <- cut(indices, breaks = k, labels = FALSE)
+num_epochs <- 1
+all_scores <- c()
+for (i in 1:k) {
+cat("processing fold #", i, "\n")
+val_indices <- which(folds == i, arr.ind = TRUE)
+val_data <- train_data[val_indices,]
+val_targets <- train_targets[val_indices]
+partial_train_data <- train_data[-val_indices,]
+partial_train_targets <- train_targets[-val_indices]
+model <- build_model()
+model %>% fit(partial_train_data, partial_train_targets,
+epochs = num_epochs, batch_size = 1, verbose = 0)
+results <- model %>% evaluate(val_data, val_targets, verbose = 0)
+all_scores <- c(all_scores, results$mean_squared_error)
+}
+```
+
+```{r}
+mean(all_scores)
+```
+
+```{r}
+model <- build_model()
+model %>% fit(train_data, train_targets,
+epochs = 80, batch_size = 16, verbose = 0)
+```
+
+```{r}
+(result <- model %>% evaluate(test_data, test_targets))
+```
+
+
+### Try other models
+```{r}
+build_model2 <- function() {
+model <- keras_model_sequential() %>%
+layer_dense(units = 128, activation = "relu",
+input_shape = dim(train_data)[[2]]) %>%
+layer_dense(units = 128, activation = "relu") %>%
+layer_dense(units = 1)
+model %>% compile(
+optimizer = "rmsprop",
+loss = "mse",
+metrics = c("mse")
+)
+}
+```
+
+```{r}
+model2 <- build_model2()
+model2 %>% fit(train_data, train_targets,
+epochs = 80, batch_size = 16, verbose = 0)
+```
+
+
+```{r}
+(result2 <- model %>% evaluate(test_data, test_targets))
+```
+
+
+
+
+

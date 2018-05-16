@@ -1,0 +1,29 @@
+---
+title: "R Notebook"
+subtitle: John-Henry Pezzuto
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+
+## Load Packages & Data
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(reticulate)
+```
+
+```{r}
+sys <- import("sys")
+sys$version
+
+x <- 4
+```
+
+
+```{python}
+y = 8
+print(y)
+```
+
