@@ -1,10 +1,11 @@
 ---
-title: "Problem Set 3"
+title: "Problem Set 3 - Image Classification"
 subtitle: "John-Henry Pezzuto"
 output:
   pdf_document:
     latex_engine: xelatex
 ---
+
 
 ## Load Packages & Data
 ```{r setup}
@@ -225,105 +226,6 @@ final_accuracy <- metrics$acc
 ```
 
 The model in the book had a loss of .07 and accuracy of .97. My model has a loss of `r final_loss` and a final accuracy of `r final_accuracy`. As of the time of writing this, my model had a higher accuracy, but also a higher loss. 
-
-# Part 2 - Scalar regression (5 points)
-
-## Load Data
-```{r}
-dataset <- dataset_boston_housing()
-c(c(train_data, train_targets), c(test_data, test_targets)) %<-% dataset
-```
-
-## Prepare Data
-```{r}
-mean.housing <- apply(train_data, 2, mean)
-std.housing <- apply(train_data, 2, sd)
-train_data <- scale(train_data, center = mean.housing, scale = std.housing)
-test_data <- scale(test_data, center = mean.housing, scale = std.housing)
-```
-
-
-## Build Model Function
-```{r}
-build_model <- function() {
-model <- keras_model_sequential() %>%
-layer_dense(units = 64, activation = "relu",
-input_shape = dim(train_data)[[2]]) %>%
-layer_dense(units = 64, activation = "relu") %>%
-layer_dense(units = 1)
-model %>% compile(
-optimizer = "rmsprop",
-loss = "mse",
-metrics = c("mse")
-)
-}
-```
-
-## 10-Fold Cross Validation
-```{r, warning=FALSE}
-k <- 10
-indices <- sample(1:nrow(train_data))
-folds <- cut(indices, breaks = k, labels = FALSE)
-num_epochs <- 1
-all_scores <- c()
-for (i in 1:k) {
-cat("processing fold #", i, "\n")
-val_indices <- which(folds == i, arr.ind = TRUE)
-val_data <- train_data[val_indices,]
-val_targets <- train_targets[val_indices]
-partial_train_data <- train_data[-val_indices,]
-partial_train_targets <- train_targets[-val_indices]
-model <- build_model()
-model %>% fit(partial_train_data, partial_train_targets,
-epochs = num_epochs, batch_size = 1, verbose = 0)
-results <- model %>% evaluate(val_data, val_targets, verbose = 0)
-all_scores <- c(all_scores, results$mean_squared_error)
-}
-```
-
-```{r}
-mean(all_scores)
-```
-
-```{r}
-model <- build_model()
-model %>% fit(train_data, train_targets,
-epochs = 80, batch_size = 16, verbose = 0)
-```
-
-```{r}
-(result <- model %>% evaluate(test_data, test_targets))
-```
-
-
-### Try other models
-```{r}
-build_model2 <- function() {
-model <- keras_model_sequential() %>%
-layer_dense(units = 128, activation = "relu",
-input_shape = dim(train_data)[[2]]) %>%
-layer_dense(units = 128, activation = "relu") %>%
-layer_dense(units = 1)
-model %>% compile(
-optimizer = "rmsprop",
-loss = "mse",
-metrics = c("mse")
-)
-}
-```
-
-```{r}
-model2 <- build_model2()
-model2 %>% fit(train_data, train_targets,
-epochs = 80, batch_size = 16, verbose = 0)
-```
-
-
-```{r}
-(result2 <- model %>% evaluate(test_data, test_targets))
-```
-
-
 
 
 
