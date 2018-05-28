@@ -1,0 +1,55 @@
+---
+title: "Delay Methods Table"
+subtitle: "John-Henry Pezzuto"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+## Load Packages & Data
+```{r setup}
+library(tidyverse)
+library(kableExtra)
+library(knitr)
+library(magick)
+```
+
+```{r global_options, include=FALSE}
+rm(list=ls())
+theme_set(theme_minimal())
+#knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+
+```{r}
+discountingtasksnames <- c("speedup.small.present, speedup.small.future, speedup.large.future, speedup.large.present, td.small.present, td.large.present, td.small.future, td.large.future")
+discountingtasksnames <- unlist(strsplit(discountingtasksnames, ","))
+discountingtasksnames <- str_replace_all(discountingtasksnames, fixed(" "), "")
+
+###### 
+
+taskname <- discountingtasksnames
+taskname <- sort(as.character(taskname))
+taskname <- str_replace(taskname, "td", "Time Discounting")
+taskname <- str_replace_all(taskname, fixed("."), " ")
+proper=function(x) paste0(toupper(substr(x, 1, 1)), tolower(substring(x, 2)))
+taskname <- proper(taskname)
+
+abbreviation <- c("slf", "slp", "ssf", "ssp", "tdlf", "tdlp", "tdsf", "tdsp")
+
+sooner <- c("1 month", "today")
+later <- c("7 months", "6 months")
+maximum.payment.size <- c("300", "300", "30", "30")
+methods.table <- data.frame(taskname, abbreviation, sooner, later, maximum.payment.size)
+
+z <- methods.table %>% 
+  kable(align = 'r', col.names = c("Discounting Task", "Abbrev.", "Sooner Payment", "Later Payment", "Maximum Payment"), format = "latex")
+
+kable_as_image(z, filename = "discount_tasks")
+
+```
+
+
+
+

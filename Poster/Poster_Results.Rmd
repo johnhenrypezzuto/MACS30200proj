@@ -1,0 +1,315 @@
+---
+title: "R Notebook"
+subtitle: "John-Henry Pezzuto"
+output:
+  pdf_document:
+    latex_engine: xelatex
+header-includes:
+    - \usepackage{caption}
+---
+\captionsetup[table]{labelformat=empty}
+
+## Load Packages & Data
+```{r setup}
+rm(list = ls())
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(FactoMineR)
+library(broom)
+library(glmnet)
+library(MultivariateRandomForest)
+library(data.table)
+theme_set(theme_minimal())
+knitr::opts_chunk$set(include = FALSE, echo=FALSE, warning=FALSE, message=FALSE)
+
+db <- read_csv("full_calculations.csv") %>% 
+  select(-IPAddress, -X1,-(nostalgic:F_disgust)) %>%
+  mutate_all(as.numeric)
+
+survey.data <- read_csv("Delay Discounting_human_80.csv") 
+
+
+```
+
+
+
+
+```{r demographics}
+respond.count <- survey.data %>% 
+  select(Status) %>% 
+  filter(!Status == "Survey Preview") %>% 
+  count()
+respond.count <- as.numeric(respond.count)
+respond.count
+
+female <- db$gender[which(db$gender==0)]
+female <- sum(female == 0)
+male <- db$gender[which(db$gender==1)]
+male <- sum(male == 1)
+
+## final sample size
+final.samplesize <- nrow(db)
+
+## age correlations 
+age.min <- min(db$age, na.rm = TRUE)
+age.max <- max(db$age, na.rm = TRUE)
+```
+
+
+
+```{r discount}
+
+
+###########
+
+factor.cols = db %>% select(ends_with("indifference.consistent"), average, average.consistent) %>% colnames(.)
+
+patience.cols = c("Patience", "s.Patience", "td.Patience")
+
+hyperbolic_exponential.cols = db %>% 
+  select(ends_with(".k"), ends_with("exponential")) %>% 
+  colnames(.)
+
+beta.delta.cols = db %>% 
+  select(ends_with(".beta"), ends_with(".delta")) %>% 
+  colnames(.)
+
+all.columns <- c(factor.cols, patience.cols, hyperbolic_exponential.cols, beta.delta.cols)
+```
+
+
+```{r PCA}
+# pc <- PCA(db, graph = FALSE)
+# pc$var$cor
+# z <- pc$var
+
+```
+
+
+
+```{r essential}
+db <- db %>% mutate_all(as.numeric)
+db[is.na(db)] <- -1
+```
+
+
+```{r}
+set.seed(8675309)
+smp_size <- floor(0.70 * nrow(db))
+train_ind <- sample(seq_len(nrow(db)), size = smp_size)
+
+
+train <- db[train_ind, ]
+test <- db[-train_ind, ]
+
+
+train_x <- train %>% select(-one_of(all.columns))
+train_x <- as.matrix(train_x)
+train_y = train %>% select(one_of(all.columns))
+train_y <- as.matrix(train_y)
+test_x <- test %>% select(-one_of(all.columns))
+test_x <- as.matrix(test_x)
+test_y <- test %>% select(one_of(all.columns))
+test_y <- as.matrix(test_y)
+```
+
+# Methods
+
+## Participants
+  Participants were `r respond.count` workers recruited from Amazon Mechanical Turk (MTurk). Participants were excluded from analysis if they did not complete the survey, had duplicate IP Addresses or MTurk IDs, failed a single attention check at the end of the survey, or reported not being able to read the questions in a comments section at the end of the survey. In addition we exclude participants who completed the survey in less than 6.5 minutes. This left us with a final sample size of  `r final.samplesize` (`r male` males, `r female` females) with an age range from `r age.min` to `r age.max`. Participants were required to answer all questions except for one section about private behavior. 
+
+## Measures
+
+  *Eliciting Discounting*. A total of 8 different methods were used the elicit discounting. All payments were hypothetical. These 8 different methods can be divided into two categories (speed-up and binary time discounting) that varied by both size of payment, and time period. In the speed-up measure, participants stated how much they would be willing to pay to speed up delivery of a hypothetical payment to a sooner time period. The payments began at $0.01 and ascended by \$2 increments in the smaller condition or by \$20 increments in the large condition until the full amount of the larger but later reward was reached. There were a total of 10 questions used by each method. Below is a table summarizing the 8 methods of eliciting discounting.
+
+
+
+```{r full_names}
+discountingtasksnames <- c("speedup.small.present, speedup.small.future, speedup.large.future, speedup.large.present, td.small.present, td.large.present, td.small.future, td.large.future")
+discountingtasksnames <- unlist(strsplit(discountingtasksnames, ","))
+discountingtasksnames <- str_replace_all(discountingtasksnames, fixed(" "), "")
+
+###### 
+
+taskname <- discountingtasksnames
+taskname <- sort(as.character(taskname))
+taskname <- str_replace(taskname, "td", "Time Discounting")
+taskname <- str_replace_all(taskname, fixed("."), " ")
+proper=function(x) paste0(toupper(substr(x, 1, 1)), tolower(substring(x, 2)))
+taskname <- proper(taskname)
+
+abbreviation <- c("slf", "slp", "ssf", "ssp", "tdlf", "tdlp", "tdsf", "tdsp")
+
+#abbreviation <- quo(abbreviation)
+abbreviation <- paste0("^(", paste(abbreviation, collapse="|"), ")")
+
+select(db, matches(abbreviation)) # what should i do with this~
+  
+
+```
+
+
+
+
+
+```{r}
+results <- as.data.frame(all.columns) %>% 
+  mutate(Discounting = as.character(all.columns),
+         rsq = 1:n(),
+         opt.lambda = 1:n()) %>% 
+  select(-all.columns)
+
+```
+
+
+
+```{r}
+
+y = db$average.consistent
+x <- db %>% select(-one_of(all.columns)) %>% data.matrix()
+
+lambdas <- 10^seq(3, -2, by = -.1)
+
+fit <- glmnet(x, y, alpha = 0, lambda = lambdas)
+cv_fit <- cv.glmnet(x, y, alpha = 0, lambda = lambdas)
+plot(cv_fit)
+opt_lambda <- cv_fit$lambda.min
+opt_lambda
+fit <- cv_fit$glmnet.fit
+
+
+y_predicted <- predict(fit, s = opt_lambda, newx = x)
+
+# Sum of Squares Total and Error
+sst <- sum((y - mean(y))^2)
+sse <- sum((y_predicted - y)^2)
+
+# R squared
+rsq <- 1 - sse / sst
+rsq
+
+
+```
+
+
+
+
+```{r}
+i=1
+best_model_full <- NA
+for (i in 1:nrow(results)){
+  y = unlist(db[results[i,1]])
+  x <- db %>% select(-one_of(all.columns)) %>% data.matrix()
+  z <- x[1,]
+  lambdas <- 10^seq(3, -2, by = -.1)
+  
+  fit <- glmnet(x, y, alpha = 0, lambda = lambdas)
+  summary(fit)
+  cv_fit <- cv.glmnet(x, y, alpha = 0, lambda = lambdas)
+  plot(cv_fit)
+  opt_lambda <- cv_fit$lambda.min
+  results[i,3] <- opt_lambda # save
+  fit <- cv_fit$glmnet.fit
+
+  for (j in 1:nrow(db)){
+    x1 <- t(x[j,] %>% as.matrix())
+    y1 <- t(y[j] %>% as.matrix())
+    
+    y_predicted <- predict(fit, s = opt_lambda, newx = x1)
+    
+    # Sum of Squares Error
+    sse <- sum((y_predicted - y[j])^2)
+    
+    # Save Results
+    results[i,3+j] <- sse
+    
+  }
+
+
+
+  y_predicted <- predict(fit, s = opt_lambda, newx = x)
+  
+  # Sum of Squares Total and Error
+  sst <- sum((y - mean(y))^2)
+  sse <- sum((y_predicted - y)^2)
+  
+  # R squared
+  rsq <- 1 - sse / sst
+  results[i,2] <- rsq
+}
+
+for (k in 1:nrow(db)){
+  best_model <- results[which.min(results[,3+k]),1]
+  best_model_full <- rbind(best_model_full, best_model)
+}
+
+best_model_full <- best_model_full[-1,] %>% as_tibble()
+```
+
+
+
+
+
+## Frquency for Model Fit
+```{r}
+best_model_full %>%
+  group_by(value) %>% 
+  summarise(Count = n()) %>% 
+  arrange(Count = desc(Count)) %>% 
+  ungroup() %>% 
+  mutate(value = str_replace(value, abbreviation, taskname),
+         value = str_replace(value, "td", "Time value"),
+         value = str_replace(value, "ss.", "Speedup Small "),
+         value = str_replace(value, "sl.", "Speedup Large "),
+         value = proper(value),
+         value = str_replace(value, "S.pa", " Speedup Pa")) %>% 
+  mutate(value = str_replace(value, "discountings", "value Small "),
+         value = str_replace(value, "discountingl.", "value Large "),
+         value = str_trim(value),
+         value = str_replace(value, "valuel.", "Value Large "),
+         value = str_replace(value, ".indifference", " Factor "),
+         value = str_replace(value, fixed("."), " "),
+         value = str_replace(value, "Time value", "Time discounting "),
+         value = proper(value)) %>%
+  mutate(value = str_replace(value, "Time value", "Time discounting "),
+        value = str_replace(value, "  ", " ")) %>% 
+  ggplot(aes(reorder(value, -Count), Count))+
+  geom_bar(stat = "identity")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  labs(x = "Discounting Task", title = "Model Which Fits the Most People?")
+
+ggsave("bestfit.png", bg = "transparent")
+```
+
+
+
+
+
+## Lowest RSQ
+```{r}
+rsqmodels <- results %>%
+  select(Discounting, rsq) %>%
+  arrange(desc(rsq)) %>% 
+  mutate(Discounting = str_replace(Discounting, abbreviation, taskname),
+         Discounting = str_replace(Discounting, "td", "Time Discounting"),
+         Discounting = str_replace(Discounting, "ss.", "Speedup Small "),
+         Discounting = str_replace(Discounting, "sl.", "Speedup Large "),
+         Discounting = str_trim(Discounting),
+         Discounting = proper(Discounting),
+         Discounting = str_replace(Discounting, "S.pa", " Speedup Pa")) %>% 
+  mutate(Discounting = str_replace(Discounting, "discountings", "Discounting Small "),
+         Discounting = str_replace(Discounting, "discountingl.", "Discounting Large "),
+         Discounting = str_replace(Discounting, ".indifference", " factor "),
+         Discounting = str_trim(Discounting)) %>%
+  mutate(Discounting = str_replace(Discounting, "Time value", "Time discounting "),
+         Discounting = str_replace(Discounting, fixed("."), " "),
+         Discounting = str_replace(Discounting, "  ", " ")) %>% 
+  kable(format = "latex")
+
+kable_as_image(rsqmodels, filename = "RSQ_table", latex_header_includes = NULL)
+```
+
+
+
